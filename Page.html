@@ -1,0 +1,50 @@
+<html>
+  <head>
+    <title>Pinch Strength Demo</title>
+    <script src="http://cdnjs.cloudflare.com/ajax/libs/three.js/r67/three.js"></script>
+    <script src="http://js.leapmotion.com/leap-0.6.2.js"></script>
+    <script src="http://js.leapmotion.com/leap-plugins-0.1.6.1.js"></script>
+    <script src="http://js.leapmotion.com/leap.rigged-hand-0.1.4.min.js"></script>
+    <script src="http://cdn.peerjs.com/0.3/peer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.js"></script>
+    <script src="./two.js"></script>
+    <script src="./randomColor.js"></script>
+
+
+    <style class="codepen">
+		body{
+		  font-family: 'Helvetica Neue', Helvetica, Arial, 'Lucida Grande', sans-serif;
+		}
+		#output{
+		  font-size: 66px;
+		  color: #005d98;
+		  text-align: left;
+		  position: fixed;
+		  bottom: 18px;
+		}
+
+		#progress {
+		  background: #005d98;
+		  position: fixed;
+		  bottom: 0;
+		  left: 0;
+		  height: 16px;
+		  width: 0%;
+		}
+    </style>
+
+  </head>
+
+  <body>
+
+    <button id="idButton" onclick=changeBrowserID()>Change ID</button>
+    <button onclick="setupPeerConnection()">Connect</button>
+
+
+    <div id="draw-shapes"></div>
+    <div id=output></div>
+    <div id=progress></div>
+  </body>
+
+  <script src="./collab.js"></script>
+</html>
