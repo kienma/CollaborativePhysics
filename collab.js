@@ -177,18 +177,11 @@ function manageDrawPaths(x,y,isLive,user,cursor) {
   vector.position = new Two.Vector().copy(vector);
   pathData = userPathData[user][cursor]
 
+
   if(isLive) {
     if(pathData.lastPath){
-      var intersects = checkSelfIntersection(pathData.lastPath.vertices,vector)
-      if (!intersects){
-        pathData.lastPath.vertices.push(vector)
-      }
-      else {
-        backGroup.remove(pathData.lastPath)
-        pathData.lastPath = null
-        pathData.lastVector = null
-      }
-    }
+      pathData.lastPath.vertices.push(vector)
+  }
     else if (pathData.lastVector){
       pathData.lastPath = two.makePath([vector,pathData.lastVector],false)
       backGroup.add(pathData.lastPath)
@@ -199,7 +192,7 @@ function manageDrawPaths(x,y,isLive,user,cursor) {
       pathData.lastPath.translation.clear();
       pathData.lastPath.stroke = randomColor();
       pathData.lastPath.fill=randomColor()
-      pathData.lastPath.linewidth = 5;
+      pathData.lastPath.linewidth = 1;
     }
     pathData.lastVector = vector
   }
@@ -207,23 +200,24 @@ function manageDrawPaths(x,y,isLive,user,cursor) {
     //path finished
     var simplifiedVertices = simplify(pathData.lastPath.vertices,40,true)
     var curved = simplifiedVertices.length > 5 ? true : false
-    var newShape = new Two.Path(simplifiedVertices,true,curved)
+    intersects = checkSelfIntersection(simplifiedVertices)
 
-    var center = calculateCenter(simplifiedVertices)
+    if(!intersects){
+      var newShape = new Two.Path(simplifiedVertices,true,curved)
+      var center = calculateCenter(simplifiedVertices)
+      newShape.center()
+      newShape.scale = 0.9
+      newShape.translation.set(center.x,center.y)
+      newShape.opacity = 0.8
+      newShape.stroke = pathData.lastPath.stroke
+      newShape.fill = pathData.lastPath.fill
+      newShape.lineWidth = pathData.lastPath.lineWidth
+      backGroup.add(newShape)
+      lastShape = newShape
+    }
 
-    newShape.center()
-    newShape.scale = 0.9
-    newShape.translation.set(center.x,center.y)
-    newShape.opacity = 0.8
-
-    newShape.stroke = pathData.lastPath.stroke
-    newShape.fill = pathData.lastPath.fill
-    newShape.lineWidth = pathData.lastPath.lineWidth
-
-    backGroup.add(newShape)
     backGroup.remove(pathData.lastPath)
     pathData.lastPath = null
-    lastShape = newShape
 
   }
   else {
@@ -265,13 +259,23 @@ function calculateCenter(verts){
   return new Two.Vector(centerX,centerY)
 }
 
-function checkSelfIntersection(vectors,vector) {
+function checkSelfIntersection(vectors){
+  var intersects = false
+  for(var i =0; i< vectors.length-2; i++){
+    var lastEdge = vectors.slice(i,i+2)
+    var otherEdges = vectors.slice(0,i).concat(vectors.slice(i+2,vectors.length))
+    intersects = intersects || checkSelfIntersectionEdge(otherEdges,lastEdge)
+  }
+  return intersects
+}
+
+function checkSelfIntersectionEdge(vectors,edge) {
   var intersects = false
   for (var i =0; i<vectors.length-1;i++) {
     p1 = vectors[i]
     p2 = vectors[i+1]
-    p3 = vectors.slice(-1)[0]
-    p4 = vector
+    p3 = edge[0]
+    p4 = edge[1]
 
     intersects = intersects || linesIntersect(p1.x,p1.y,p2.x,p2.y,p3.x,p3.y,p4.x,p4.y)
   }
