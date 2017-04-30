@@ -80,7 +80,6 @@ function setupPeerConnection() {
 Leap.loop({background: true}, {
 
   frame: function(frame){
-
     frameNum ++
     localInput = getLocalInput(frame)
     if (hasPeer){
@@ -200,7 +199,8 @@ function manageDrawPaths(x,y,isLive,user,cursor) {
     //path finished
     var simplifiedVertices = simplify(pathData.lastPath.vertices,40,true)
     var curved = simplifiedVertices.length > 5 ? true : false
-    intersects = checkSelfIntersection(simplifiedVertices)
+    //TODO: fix self-intersection checking algo
+    intersects = false;//checkSelfIntersection(simplifiedVertices)
 
     if(!intersects){
       var newShape = new Two.Path(simplifiedVertices,true,curved)
