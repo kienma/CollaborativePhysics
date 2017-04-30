@@ -1,7 +1,7 @@
 var output = document.getElementById('output'),
   progress = document.getElementById('progress');
   idButton = document.getElementById('idButton')
-
+modeStatus = document.getElementById('modeStatus')
 var browserID = 1
 
 var appWidth = window.innerWidth;
@@ -29,6 +29,14 @@ var userPathData = [
   lastPath:null }]
 ]
 var userColors=[]
+var userModes=[0,0]
+
+var eventEnum = {
+  DEFAULT: 0,
+  CIRCLE_GESTURE: 1,
+  CLEAR_GESTURE: 2,
+  TAP_GESTURE: 3
+}
 
 var Engine = Matter.Engine,
     Render = Matter.Render,
@@ -102,9 +110,9 @@ function setupPeerConnection() {
 }
 
 //MAIN LOOP (uses requestAnimationFrame)
-Leap.loop({background: true}, {
+var leapController = Leap.loop({background: true}, {
   frame: function(frame){
-
+    console.log(frame.gestures)
     var bodies = Matter.Composite.allBodies(engine.world);
     for (var i =0;i<bodies.length;i++) {
       var body = bodies[i]
@@ -113,24 +121,12 @@ Leap.loop({background: true}, {
         renderShape.translation.set(body.position.x,body.position.y)
         renderShape.rotation = body.angle
 
-        // console.log(body.vertices[0].x)
-        // console.log(renderShape.vertices[0].x+renderShape.translation.x)
-        // console.log("-----")
-
-        // renderShape.rotation = body.angle
-        // //console.log(body.angle)
-        //
-        // console.log(body.vertices[0])
-        // console.log(renderShape.vertices[0])
-        // console.log(body.position.x)
-        // console.log(renderShape.translation.x)
-        // console.log("-----")
       }
 
     }
     Engine.update(engine, 1000/60)
     frameNum ++
-    localInput = getLocalInput(frame)
+    localInput = getLocalInput(frame,leapController)
     if (hasPeer){
       if(frameNum % 1 ==0){
         dataConnectionObj.send(localInput)
@@ -142,7 +138,7 @@ Leap.loop({background: true}, {
 }
 });
 
-function getLocalInput (frame){
+function getLocalInput (frame,controller){
   var input = []
   var cursorInput
 
@@ -160,11 +156,24 @@ function getLocalInput (frame){
         var appX = normalizedPoint[0] //* appWidth;
         var appY = (1 - normalizedPoint[1])// * appHeight;
 
-        cursorInput = new CIO(appX,appY,false,0)
+        var cursorInput = new CIO(appX,appY,false,0)
+
+        var gesture = frame.gestures[0]
+        if(gesture){
+          if (gesture.type == "circle") {
+            if(!controller.frame(1).gestures[0]){
+              cursorInput.Md = eventEnum.CIRCLE_GESTURE
+            }
+          }
+          if (gesture.type =="keyTap") {
+            cursorInput.Md = eventEnum.TAP_GESTURE
+          }
+        }
+
 
         if(hand.pinchStrength ==0) {
           gestureTimers.openPinch ++
-          if(  gestureTimers.openPinch > 200) {
+          if(  gestureTimers.openPinch > 150) {
             restartPhysics()
             restartRenderer()
             setupCursors()
@@ -190,6 +199,7 @@ function getLocalInput (frame){
   return input
 }
 
+
 function CIO(Xpos,Ypos, cursorClosed,mode) {
   this.Xp = Math.round(Xpos * 10000) / 10000
   this.Yp = Math.round(Ypos * 10000) / 10000
@@ -210,15 +220,24 @@ function updateState(input,cursors,user) {
       else {
         cursors[i].fill= userColors[user]
       }
-      switch(input[i].Md) {
+      if(user==0) { //if user is the local user
+        modeStatus.innerHTML="Mode: "+ (userModes[user])
+      }
+      switch(userModes[user]) {
         case 0:
           manageDrawPaths(input[i].Xp*appWidth, input[i].Yp*appHeight,input[i].Cc,user,i)
           break
         case 1:
-          addCircle(input[i].Xp*appWidth, input[i].Yp*appHeight,input[i].Cc)
+          addCircle(input[i].Xp*appWidth, input[i].Yp*appHeight,input[i].Md)
           break
       }
-
+      //if there is an gesture event, do stuff
+      switch(input[i].Md ) {
+        case 1:
+          userModes[user]++
+          userModes[user] = userModes[user]%3
+          break;
+      }
       cursors[i].translation.set(input[i].Xp*appWidth,input[i].Yp*appHeight)
 
     }
@@ -233,6 +252,24 @@ function setupCursorColors(localC,remoteC){
   for (var i = 0; i<2; i++){
     remoteC[i].stroke=userColors[1]
     remoteC[i].linewidth=6
+  }
+}
+
+function addCircle(x,y,isLive){
+  if (isLive) {
+    rad = Math.random()*20+10
+    circle = two.makeCircle(x,y,rad)
+    circle.stroke = randomColor();
+    circle.fill=randomColor()
+    circle.linewidth = 1;
+
+    circleBody = Matter.Bodies.circle(x,y,rad)
+    circleBody.renderShape = circle
+
+    backGroup.add(circle)
+    World.add(engine.world,[circleBody])
+
+
   }
 }
 
