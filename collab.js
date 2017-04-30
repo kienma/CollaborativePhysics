@@ -56,6 +56,10 @@ function restartPhysics(){
       Bodies.rectangle(0, appHeight/2, 50, appHeight, { isStatic: true })
   ]);
   engine.world.gravity.y = 1;
+  var bodies = Matter.Composite.allBodies(engine.world);
+  for(var i =0; i<bodies.length;i++) {
+    bodies.friction = 1
+  }
 }
 
 function restartRenderer(){
@@ -156,7 +160,7 @@ function getLocalInput (frame){
         var appX = normalizedPoint[0] //* appWidth;
         var appY = (1 - normalizedPoint[1])// * appHeight;
 
-        cursorInput = new CIO(appX,appY,false)
+        cursorInput = new CIO(appX,appY,false,0)
 
         if(hand.pinchStrength ==0) {
           gestureTimers.openPinch ++
@@ -186,10 +190,11 @@ function getLocalInput (frame){
   return input
 }
 
-function CIO(Xpos,Ypos, cursorClosed) {
+function CIO(Xpos,Ypos, cursorClosed,mode) {
   this.Xp = Math.round(Xpos * 10000) / 10000
   this.Yp = Math.round(Ypos * 10000) / 10000
   this.Cc = cursorClosed
+  this.Md = mode
 }
 
 function parseRemoteInput(input){
@@ -205,7 +210,15 @@ function updateState(input,cursors,user) {
       else {
         cursors[i].fill= userColors[user]
       }
-      manageDrawPaths(input[i].Xp*appWidth, input[i].Yp*appHeight,input[i].Cc,user,i)
+      switch(input[i].Md) {
+        case 0:
+          manageDrawPaths(input[i].Xp*appWidth, input[i].Yp*appHeight,input[i].Cc,user,i)
+          break
+        case 1:
+          addCircle(input[i].Xp*appWidth, input[i].Yp*appHeight,input[i].Cc)
+          break
+      }
+
       cursors[i].translation.set(input[i].Xp*appWidth,input[i].Yp*appHeight)
 
     }
