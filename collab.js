@@ -50,9 +50,15 @@ generateUserColors()
 setupCursors()
 
 var gestureTimers = {
-  openPinch: 0
+  openPinch: 0,
+  palmUp:0
 }
 
+function resetCanvas(){
+  restartPhysics()
+  restartRenderer()
+  setupCursors()
+}
 
 function restartPhysics(){
   World.clear(engine.world,false)
@@ -82,7 +88,7 @@ function changeBrowserID(){
 }
 
 function makePeer(){
-  var localID = "aajunction" + browserID,key
+  var localID = "aaajunction" + browserID,key
   peer = new Peer(localID, {key: 'abblrhx3zryynwmi'});
   console.log("making local peer with id:" + localID)
 
@@ -99,7 +105,7 @@ function makePeer(){
 function setupPeerConnection() {
   makePeer()
 
-  var remoteID = 'aajunction' + (browserID == 0 ? 1 : 0)
+  var remoteID = 'aaajunction' + (browserID == 0 ? 1 : 0)
   console.log("connecting to peer with remote id:"+remoteID)
   dataConnectionObj = peer.connect(remoteID,{reliable:false,serialization:"json"})
   dataConnectionObj.on('open',function(){console.log("connectedAsMaster!")})
@@ -112,7 +118,7 @@ function setupPeerConnection() {
 //MAIN LOOP (uses requestAnimationFrame)
 var leapController = Leap.loop({background: true}, {
   frame: function(frame){
-    console.log(frame.gestures)
+    //console.log(frame.gestures)
     var bodies = Matter.Composite.allBodies(engine.world);
     for (var i =0;i<bodies.length;i++) {
       var body = bodies[i]
@@ -160,23 +166,36 @@ function getLocalInput (frame,controller){
 
         var gesture = frame.gestures[0]
         if(gesture){
-          if (gesture.type == "circle") {
+          /*if (gesture.type == "circle") {
             if(!controller.frame(1).gestures[0]){
               cursorInput.Md = eventEnum.CIRCLE_GESTURE
             }
-          }
+          }*/
           if (gesture.type =="keyTap") {
             cursorInput.Md = eventEnum.TAP_GESTURE
           }
         }
 
+        console.log(Math.abs(hand.palmNormal[1]-1)<0.05)
+        if(Math.abs(hand.palmNormal[1]-1)<0.05) {
+          gestureTimers.palmUp ++
+          if(  gestureTimers.palmUp > 30) {
+            cursorInput.Md = eventEnum.CIRCLE_GESTURE
+            gestureTimers.palmUp = 0
+            console.log("sending mode change")
+          }
+        }
+        else {gestureTimers.palmUp = 0}
 
-        if(hand.pinchStrength ==0) {
+        console.log(hand.grabStrength)
+        //console.log(hand.palmNormal)
+        if(hand.grabStrength ==1) {
           gestureTimers.openPinch ++
           if(  gestureTimers.openPinch > 150) {
-            restartPhysics()
-            restartRenderer()
-            setupCursors()
+            if(Math.abs(hand.palmNormal[1]-1)<0.05){
+              cursorInput.Md = eventEnum.CLEAR_GESTURE
+              console.log("sending clear gesture")
+            }
           }
         }
         else {
@@ -225,18 +244,26 @@ function updateState(input,cursors,user) {
       }
       switch(userModes[user]) {
         case 0:
-          manageDrawPaths(input[i].Xp*appWidth, input[i].Yp*appHeight,input[i].Cc,user,i)
+          manageDrawPaths(input[i].Xp*appWidth, input[i].Yp*appHeight,input[i].Cc,user,i,true)
           break
         case 1:
           addCircle(input[i].Xp*appWidth, input[i].Yp*appHeight,input[i].Md)
           break
+        case 2:
+          manageDrawPaths(input[i].Xp*appWidth, input[i].Yp*appHeight,input[i].Cc,user,i,false)
+
       }
       //if there is an gesture event, do stuff
-      switch(input[i].Md ) {
-        case 1:
-          userModes[user]++
-          userModes[user] = userModes[user]%3
-          break;
+      if(!input.Cc){
+        switch(input[i].Md) {
+          case eventEnum.CIRCLE_GESTURE:
+            userModes[user]++
+            userModes[user] = userModes[user]%3
+            break;
+          case eventEnum.CLEAR_GESTURE:
+            resetCanvas()
+            break;
+        }
       }
       cursors[i].translation.set(input[i].Xp*appWidth,input[i].Yp*appHeight)
 
@@ -257,7 +284,7 @@ function setupCursorColors(localC,remoteC){
 
 function addCircle(x,y,isLive){
   if (isLive) {
-    rad = Math.random()*20+10
+    rad = Math.random()*10+5
     circle = two.makeCircle(x,y,rad)
     circle.stroke = randomColor();
     circle.fill=randomColor()
@@ -273,7 +300,7 @@ function addCircle(x,y,isLive){
   }
 }
 
-function manageDrawPaths(x,y,isLive,user,cursor) {
+function manageDrawPaths(x,y,isLive,user,cursor,isStatic) {
   var vector = new Two.Vector(x,y)
   vector.position = new Two.Vector().copy(vector);
   pathData = userPathData[user][cursor]
@@ -311,7 +338,9 @@ function manageDrawPaths(x,y,isLive,user,cursor) {
       var newShape = new Two.Path(centertedVerts,true,false)
       var testBody = Bodies.fromVertices(0,0,centertedVerts)
 
+
       if(testBody) {
+
 
         newShape.opacity = 0.8
         newShape.stroke = pathData.lastPath.stroke
@@ -324,7 +353,8 @@ function manageDrawPaths(x,y,isLive,user,cursor) {
         newShape.scale = 0.5
         Matter.Body.scale(testBody,0.5,0.5)
 
-        testBody.friction = 1
+        testBody.friction = 0.5
+        testBody.isStatic = isStatic
 
         backGroup.add(newShape)
         testBody.renderShape=newShape
