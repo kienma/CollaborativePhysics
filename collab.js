@@ -4,8 +4,8 @@ var output = document.getElementById('output'),
 
 var browserID = 1
 
-var appWidth = screen.width;
-var appHeight = screen.height;
+var appWidth = window.innerWidth;
+var appHeight = window.innerHeight;
 var elem = document.getElementById('draw-shapes');
 var params = { width:appWidth, height:appHeight };
 var two = new Two(params).appendTo(elem);
@@ -28,13 +28,35 @@ var userPathData = [
   {lastVector:null,
   lastPath:null }]
 ]
-
-
 var userColors=[]
 
+var Engine = Matter.Engine,
+    Render = Matter.Render,
+    World = Matter.World,
+    Bodies = Matter.Bodies;
+var engine = Engine.create();
+
 restartRenderer()
+restartPhysics()
 generateUserColors()
 setupCursors()
+
+var gestureTimers = {
+  openPinch: 0
+}
+
+
+function restartPhysics(){
+  World.clear(engine.world,false)
+  World.add(engine.world, [
+      // walls
+      Bodies.rectangle(appWidth/2, 0, appWidth, 50, { isStatic: true }),
+      Bodies.rectangle(appWidth/2, appHeight, appWidth, 50, { isStatic: true }),
+      Bodies.rectangle(appWidth, appHeight/2, 50, appHeight, { isStatic: true }),
+      Bodies.rectangle(0, appHeight/2, 50, appHeight, { isStatic: true })
+  ]);
+  engine.world.gravity.y = 1;
+}
 
 function restartRenderer(){
   two.clear()
@@ -48,7 +70,7 @@ function changeBrowserID(){
 }
 
 function makePeer(){
-  var localID = "ajunction" + browserID,key
+  var localID = "aajunction" + browserID,key
   peer = new Peer(localID, {key: 'abblrhx3zryynwmi'});
   console.log("making local peer with id:" + localID)
 
@@ -65,7 +87,7 @@ function makePeer(){
 function setupPeerConnection() {
   makePeer()
 
-  var remoteID = 'ajunction' + (browserID == 0 ? 1 : 0)
+  var remoteID = 'aajunction' + (browserID == 0 ? 1 : 0)
   console.log("connecting to peer with remote id:"+remoteID)
   dataConnectionObj = peer.connect(remoteID,{reliable:false,serialization:"json"})
   dataConnectionObj.on('open',function(){console.log("connectedAsMaster!")})
@@ -75,11 +97,34 @@ function setupPeerConnection() {
   hasPeer = true
 }
 
-
-// Set up the controller:
+//MAIN LOOP (uses requestAnimationFrame)
 Leap.loop({background: true}, {
-
   frame: function(frame){
+
+    var bodies = Matter.Composite.allBodies(engine.world);
+    for (var i =0;i<bodies.length;i++) {
+      var body = bodies[i]
+      var renderShape = bodies[i].renderShape
+      if(renderShape){
+        renderShape.translation.set(body.position.x,body.position.y)
+        renderShape.rotation = body.angle
+
+        // console.log(body.vertices[0].x)
+        // console.log(renderShape.vertices[0].x+renderShape.translation.x)
+        // console.log("-----")
+
+        // renderShape.rotation = body.angle
+        // //console.log(body.angle)
+        //
+        // console.log(body.vertices[0])
+        // console.log(renderShape.vertices[0])
+        // console.log(body.position.x)
+        // console.log(renderShape.translation.x)
+        // console.log("-----")
+      }
+
+    }
+    Engine.update(engine, 1000/60)
     frameNum ++
     localInput = getLocalInput(frame)
     if (hasPeer){
@@ -102,10 +147,10 @@ function getLocalInput (frame){
   for (var i =0; i<2; i++) {
     hand = frame.hands[i]
     if (hand) {
-      var pointable = hand.pointables[0];
+      var pointable = hand.pointables[1];
       if (pointable) {
         //var leapPoint = pointable.stabilizedTipPosition;
-        var leapPoint = hand.stabilizedPalmPosition
+        var leapPoint = hand.palmPosition
         var normalizedPoint = iBox.normalizePoint(leapPoint, true);
 
         var appX = normalizedPoint[0] //* appWidth;
@@ -114,8 +159,15 @@ function getLocalInput (frame){
         cursorInput = new CIO(appX,appY,false)
 
         if(hand.pinchStrength ==0) {
-          restartRenderer()
-          setupCursors()
+          gestureTimers.openPinch ++
+          if(  gestureTimers.openPinch > 200) {
+            restartPhysics()
+            restartRenderer()
+            setupCursors()
+          }
+        }
+        else {
+          gestureTimers.openPinch = 0
         }
         if(hand.pinchStrength >= 0.5) {
           cursorInput.Cc = true
@@ -128,7 +180,7 @@ function getLocalInput (frame){
       }
   }
   else {
-    localCursors[i].translation.set(-100,-100)
+    //localCursors[i].translation.set(-100,-100)
     }
   }
   return input
@@ -203,16 +255,32 @@ function manageDrawPaths(x,y,isLive,user,cursor) {
     intersects = false;//checkSelfIntersection(simplifiedVertices)
 
     if(!intersects){
-      var newShape = new Two.Path(simplifiedVertices,true,curved)
-      var center = calculateCenter(simplifiedVertices)
-      newShape.center()
-      newShape.scale = 0.9
-      newShape.translation.set(center.x,center.y)
-      newShape.opacity = 0.8
-      newShape.stroke = pathData.lastPath.stroke
-      newShape.fill = pathData.lastPath.fill
-      newShape.lineWidth = pathData.lastPath.lineWidth
-      backGroup.add(newShape)
+
+      var center = Matter.Vertices.centre(simplifiedVertices);
+      var centertedVerts = Matter.Vertices.translate(simplifiedVertices, center, -1);
+      var newShape = new Two.Path(centertedVerts,true,false)
+      var testBody = Bodies.fromVertices(0,0,centertedVerts)
+
+      if(testBody) {
+
+        newShape.opacity = 0.8
+        newShape.stroke = pathData.lastPath.stroke
+        newShape.fill = pathData.lastPath.fill
+        newShape.lineWidth = pathData.lastPath.lineWidth
+
+        Matter.Body.setPosition(testBody,center)
+        newShape.translation.set(center.x,center.y)
+
+        newShape.scale = 0.5
+        Matter.Body.scale(testBody,0.5,0.5)
+
+        testBody.friction = 1
+
+        backGroup.add(newShape)
+        testBody.renderShape=newShape
+        World.add(engine.world,[testBody])
+      }
+
       lastShape = newShape
     }
 
