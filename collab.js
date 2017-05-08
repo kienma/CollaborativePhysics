@@ -4,9 +4,9 @@ var output = document.getElementById('output'),
 modeStatus = document.getElementById('modeStatus')
 var browserID = 1
 
+var elem = document.getElementById('draw-shapes');
 var appWidth = window.innerWidth;
 var appHeight = window.innerHeight;
-var elem = document.getElementById('draw-shapes');
 var params = { width:appWidth, height:appHeight };
 var two = new Two(params).appendTo(elem);
 var localCursors
@@ -52,6 +52,35 @@ setupCursors()
 var gestureTimers = {
   openPinch: 0,
   palmUp:0
+}
+
+var standardInputState = {
+  mouseX:0,
+  mouseY:0,
+  mouseDown:false,
+  spaceKey:false,
+  mouseClick:false,
+  cKey:false
+}
+
+window.onmousemove = function(e) {
+  standardInputState.mouseX = e.pageX/appWidth
+  standardInputState.mouseY = e.pageY/appHeight
+}
+window.onmousedown = function(e) {
+  standardInputState.mouseDown = true
+}
+window.onmouseup = function(e) {
+  standardInputState.mouseDown = false
+}
+window.onclick = function(e) {
+  console.log("click")
+  standardInputState.mouseClick = true
+}
+window.onkeypress = function(e) {
+  var kc = e.keyCode
+  if (kc == 99) standardInputState.cKey = true
+  if (kc == 32) standardInputState.spaceKey = true
 }
 
 function resetCanvas(){
@@ -115,36 +144,79 @@ function setupPeerConnection() {
   hasPeer = true
 }
 
-//MAIN LOOP (uses requestAnimationFrame)
+//Setup leap controller
 var leapController = Leap.loop({background: true}, {
-  frame: function(frame){
-    //console.log(frame.gestures)
-    var bodies = Matter.Composite.allBodies(engine.world);
-    for (var i =0;i<bodies.length;i++) {
-      var body = bodies[i]
-      var renderShape = bodies[i].renderShape
-      if(renderShape){
-        renderShape.translation.set(body.position.x,body.position.y)
-        renderShape.rotation = body.angle
-
-      }
-
-    }
-    Engine.update(engine, 1000/60)
-    frameNum ++
-    localInput = getLocalInput(frame,leapController)
-    if (hasPeer){
-      if(frameNum % 1 ==0){
-        dataConnectionObj.send(localInput)
-      }
-    }
-    updateState(localInput,localCursors,0)
-    two.update()
-
-}
+  frame: leapUpdateLoop
 });
 
-function getLocalInput (frame,controller){
+//If leap controller not connected, use standard loop
+if(!leapController.connected()) {
+  window.requestAnimationFrame(standardUpdateLoop)
+}
+
+
+function standardUpdateLoop() {
+  localInput = getLocalStandardInput()
+  baseUpdateLoop(localInput)
+  window.requestAnimationFrame(standardUpdateLoop)
+}
+
+//
+function leapUpdateLoop(frame){
+  localInput = getLocalLeapInput(frame,leapController)
+  baseUpdateLoop(localInput)
+}
+
+function baseUpdateLoop(input) {
+  syncPhysicsToGraphics()
+  Engine.update(engine, 1000/60)
+  frameNum ++
+  if (hasPeer){
+    if(frameNum % 1 ==0){
+      dataConnectionObj.send(localInput)
+    }
+  }
+  updateState(localInput,localCursors,0)
+  two.update()
+}
+
+function syncPhysicsToGraphics(){
+  var bodies = Matter.Composite.allBodies(engine.world);
+  for (var i =0;i<bodies.length;i++) {
+    var body = bodies[i]
+    var renderShape = bodies[i].renderShape
+    if(renderShape){
+      renderShape.translation.set(body.position.x,body.position.y)
+      renderShape.rotation = body.angle
+
+    }
+
+  }
+}
+
+function getLocalStandardInput() {
+  input = []
+  var sI = standardInputState
+  var modeEvent = 0
+  if (standardInputState.cKey) {
+    console.log("cealr event")
+    modeEvent = eventEnum.CLEAR_GESTURE
+    standardInputState.cKey = false
+  }
+  else if (standardInputState.spaceKey) {
+    modeEvent = eventEnum.CIRCLE_GESTURE
+    standardInputState.spaceKey = false
+  }
+  else if (standardInputState.mouseClick) {
+    modeEvent = eventEnum.TAP_GESTURE
+    standardInputState.mouseClick = false
+  }
+  var cursorInput = new CIO(sI.mouseX,sI.mouseY,sI.mouseDown,modeEvent)
+  input.push(cursorInput)
+  return input
+}
+
+function getLocalLeapInput (frame,controller){
   var input = []
   var cursorInput
 
@@ -218,7 +290,7 @@ function getLocalInput (frame,controller){
   return input
 }
 
-
+//Input object that is sent to peer
 function CIO(Xpos,Ypos, cursorClosed,mode) {
   this.Xp = Math.round(Xpos * 10000) / 10000
   this.Yp = Math.round(Ypos * 10000) / 10000
@@ -266,7 +338,6 @@ function updateState(input,cursors,user) {
         }
       }
       cursors[i].translation.set(input[i].Xp*appWidth,input[i].Yp*appHeight)
-
     }
   }
 }
@@ -382,12 +453,12 @@ function generateUserColors(){
 function setupCursors() {
   cursorRadius = 10
   localCursors = [
-    two.makeCircle(0, 0, cursorRadius),
-    two.makeCircle(0, 0, cursorRadius),
+    two.makeCircle(-20, -20, cursorRadius),
+    two.makeCircle(-20, -20, cursorRadius),
   ]
   remoteCursors = [
-    two.makeCircle(0, 0, cursorRadius),
-    two.makeCircle(0, 0, cursorRadius),
+    two.makeCircle(-20, -20, cursorRadius),
+    two.makeCircle(-20, -20, cursorRadius),
   ]
   for(var i =0;i<4;i++){
     frontGroup.add(localCursors.concat(remoteCursors)[i])
