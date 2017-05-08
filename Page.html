@@ -17,10 +17,11 @@
 
   <body>
 
-    <button id="idButton" onclick=changeBrowserID()>Change ID</button>
-    <button onclick="setupPeerConnection()">Connect</button>
-    <div id="modeStatus">Draw</div>
-
+    <div id="header" style="position:absolute">
+      <button id="idButton" onclick=changeBrowserID()>Change ID</button>
+      <button onclick="setupPeerConnection()">Connect</button>
+      <div id="modeStatus">Draw</div>
+    </div>
 
     <div id="draw-shapes"></div>
   </body>
